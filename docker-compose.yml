@@ -55,6 +55,7 @@ services:
       DB_USER: aquaflow
       DB_PASSWORD: aquaflow_dev
       DB_PORT: 5432
+      DB_SCHEMA: aquaflow
     volumes:
       - ./backend:/app
       - go_modules:/go/pkg/mod

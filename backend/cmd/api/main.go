@@ -3,14 +3,25 @@ package main
 import (
 	"log"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gkalyan/aquaflow-analytics/internal/config"
+	"github.com/gkalyan/aquaflow-analytics/internal/core/db"
 	_ "github.com/joho/godotenv/autoload"
 )
 
 func main() {
+	// Load configuration
+	cfg := config.Load()
+
+	// Connect to database
+	database, err := db.Connect(cfg.DatabaseURL)
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer database.Close()
+
 	r := gin.Default()
 
 	// CORS middleware
@@ -29,12 +40,18 @@ func main() {
 
 	// Health check endpoint - SHIP THIS FIRST!
 	r.GET("/health", func(c *gin.Context) {
+		dbStatus := "connected"
+		if err := database.HealthCheck(); err != nil {
+			dbStatus = "error: " + err.Error()
+		}
+
 		c.JSON(http.StatusOK, gin.H{
 			"status":    "healthy",
 			"timestamp": time.Now().Format(time.RFC3339),
 			"service":   "aquaflow-api",
 			"version":   "0.1.0",
-			"database":  "connected", // TODO: Add actual DB health check
+			"database":  dbStatus,
+			"schema":    cfg.DBSchema,
 		})
 	})
 
@@ -62,15 +79,11 @@ func main() {
 		})
 	}
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "3000"
-	}
-
-	log.Printf("Starting AquaFlow Analytics API on port %s", port)
-	log.Printf("Environment: %s", os.Getenv("GIN_MODE"))
+	log.Printf("Starting AquaFlow Analytics API on port %s", cfg.Port)
+	log.Printf("Environment: %s", cfg.DatabaseURL)
+	log.Printf("Database Schema: %s", cfg.DBSchema)
 	
-	if err := r.Run(":" + port); err != nil {
+	if err := r.Run(":" + cfg.Port); err != nil {
 		log.Fatal("Failed to start server:", err)
 	}
 }
