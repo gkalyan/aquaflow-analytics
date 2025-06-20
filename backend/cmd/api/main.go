@@ -62,6 +62,29 @@ func main() {
 			c.JSON(200, gin.H{"message": "pong", "timestamp": time.Now().Format(time.RFC3339)})
 		})
 
+		// Database schema information endpoint
+		api.GET("/schema", func(c *gin.Context) {
+			var tableCount, coreTableCount int
+			
+			// Get total table count
+			database.QueryRow("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'aquaflow'").Scan(&tableCount)
+			
+			// Get core table count
+			database.QueryRow(`
+				SELECT COUNT(*) FROM information_schema.tables 
+				WHERE table_schema = 'aquaflow' 
+				AND table_name IN ('datasets', 'parameters', 'series', 'numeric_values')
+			`).Scan(&coreTableCount)
+
+			c.JSON(200, gin.H{
+				"schema": "aquaflow",
+				"total_tables": tableCount,
+				"core_tables": coreTableCount,
+				"status": "ready",
+				"timestamp": time.Now().Format(time.RFC3339),
+			})
+		})
+
 		// Query endpoints - core functionality for Olivia
 		api.POST("/query", func(c *gin.Context) {
 			c.JSON(200, gin.H{

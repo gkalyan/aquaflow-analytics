@@ -12,7 +12,8 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./db/migrations:/docker-entrypoint-initdb.d
+      # Note: migrations commented out since schema already exists manually
+      # - ./db/migrations:/docker-entrypoint-initdb.d
     networks:
       - aquaflow-network
     healthcheck:

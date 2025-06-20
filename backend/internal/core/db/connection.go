@@ -37,7 +37,7 @@ func (db *DB) HealthCheck() error {
 		return fmt.Errorf("database ping failed: %w", err)
 	}
 
-	// Test schema access - try to query a table that should exist
+	// Test schema access - check for key tables that should exist
 	var count int
 	err := db.QueryRow("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'aquaflow'").Scan(&count)
 	if err != nil {
@@ -48,5 +48,18 @@ func (db *DB) HealthCheck() error {
 		return fmt.Errorf("aquaflow schema appears to be empty or not accessible")
 	}
 
+	// Test if core tables exist (datasets, parameters, series, numeric_values)
+	coreTableCount := 0
+	coreTableQuery := `
+		SELECT COUNT(*) FROM information_schema.tables 
+		WHERE table_schema = 'aquaflow' 
+		AND table_name IN ('datasets', 'parameters', 'series', 'numeric_values')
+	`
+	err = db.QueryRow(coreTableQuery).Scan(&coreTableCount)
+	if err != nil {
+		return fmt.Errorf("core tables check failed: %w", err)
+	}
+
+	log.Printf("Database health check passed: %d total tables, %d core tables found in aquaflow schema", count, coreTableCount)
 	return nil
 }

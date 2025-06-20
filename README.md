@@ -28,8 +28,16 @@ AquaFlow Analytics helps water operations managers like Olivia answer operationa
 
 3. **Test the setup:**
    ```bash
+   # Test API health
    curl http://localhost:3000/health
+   
+   # Check database schema
+   curl http://localhost:3000/api/schema
    ```
+
+### Database Schema
+
+**Important**: The aquaflow database schema and all tables already exist and have been manually created. The migration files in `db/migrations/` are for reference only and are not automatically executed.
 
 ### Architecture
 
