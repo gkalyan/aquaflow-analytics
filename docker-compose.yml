@@ -1,0 +1,114 @@
+version: '3.8'
+
+services:
+  timescaledb:
+    image: timescale-postgis-pg17
+    container_name: aquaflow-db
+    environment:
+      POSTGRES_DB: aquaflowdb
+      POSTGRES_USER: aquaflow
+      POSTGRES_PASSWORD: aquaflow_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d
+    networks:
+      - aquaflow-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aquaflow -d aquaflowdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: aquaflow-cache
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - aquaflow-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../docker/development/Dockerfile.backend
+    container_name: aquaflow-api
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgres://aquaflow:aquaflow_dev@timescaledb:5432/aquaflowdb?sslmode=disable&search_path=aquaflow
+      REDIS_URL: redis://redis:6379
+      GIN_MODE: debug
+      PORT: 3000
+      DB_HOST: timescaledb
+      DB_NAME: aquaflowdb
+      DB_USER: aquaflow
+      DB_PASSWORD: aquaflow_dev
+      DB_PORT: 5432
+    volumes:
+      - ./backend:/app
+      - go_modules:/go/pkg/mod
+    networks:
+      - aquaflow-network
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: air
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../docker/development/Dockerfile.frontend
+    container_name: aquaflow-ui
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:3000/api
+    volumes:
+      - ./frontend:/app
+      - node_modules:/app/node_modules
+    networks:
+      - aquaflow-network
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: aquaflow-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@aquaflow.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "8080:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - aquaflow-network
+    restart: unless-stopped
+    depends_on:
+      - timescaledb
+
+volumes:
+  postgres_data:
+  redis_data:
+  go_modules:
+  node_modules:
+  pgadmin_data:
+
+networks:
+  aquaflow-network:
+    driver: bridge
