@@ -8,6 +8,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gkalyan/aquaflow-analytics/internal/config"
 	"github.com/gkalyan/aquaflow-analytics/internal/core/db"
+	"github.com/gkalyan/aquaflow-analytics/internal/core/handlers"
+	"github.com/gkalyan/aquaflow-analytics/internal/core/middleware"
 	_ "github.com/joho/godotenv/autoload"
 )
 
@@ -55,12 +57,26 @@ func main() {
 		})
 	})
 
-	// API routes
+	// Initialize handlers
+	authHandler := handlers.NewAuthHandler(cfg.JWTSecret)
+
+	// Auth routes (no middleware)
+	auth := r.Group("/api/auth")
+	{
+		auth.POST("/login", authHandler.Login)
+		auth.POST("/logout", authHandler.Logout)
+	}
+
+	// API routes (protected)
 	api := r.Group("/api")
+	api.Use(middleware.AuthMiddleware(cfg.JWTSecret))
 	{
 		api.GET("/ping", func(c *gin.Context) {
 			c.JSON(200, gin.H{"message": "pong", "timestamp": time.Now().Format(time.RFC3339)})
 		})
+
+		// User routes
+		api.GET("/me", authHandler.GetCurrentUser)
 
 		// Database schema information endpoint
 		api.GET("/schema", func(c *gin.Context) {
