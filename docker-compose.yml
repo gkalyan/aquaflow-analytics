@@ -1,17 +1,16 @@
-version: '3.8'
-
 services:
   timescaledb:
-    image: timescale-postgis-pg17
+    image: timescale-postgis-pg17:latest
+    pull_policy: never
     container_name: aquaflow-db
     environment:
       POSTGRES_DB: aquaflowdb
       POSTGRES_USER: aquaflow
-      POSTGRES_PASSWORD: aquaflow_dev
+      POSTGRES_PASSWORD: changeme
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - /Users/gkalyan/Projects/xOverTime/tidmvp/data/pgdata:/home/postgres/pgdata/data
       # Note: migrations commented out since schema already exists manually
       # - ./db/migrations:/docker-entrypoint-initdb.d
     networks:
@@ -47,14 +46,14 @@ services:
     ports:
       - "3000:3000"
     environment:
-      DATABASE_URL: postgres://aquaflow:aquaflow_dev@timescaledb:5432/aquaflowdb?sslmode=disable&search_path=aquaflow
+      DATABASE_URL: postgres://aquaflow:changeme@timescaledb:5432/aquaflowdb?sslmode=disable&search_path=aquaflow
       REDIS_URL: redis://redis:6379
       GIN_MODE: debug
       PORT: 3000
       DB_HOST: timescaledb
       DB_NAME: aquaflowdb
       DB_USER: aquaflow
-      DB_PASSWORD: aquaflow_dev
+      DB_PASSWORD: changeme
       DB_PORT: 5432
       DB_SCHEMA: aquaflow
     volumes:

@@ -14,6 +14,7 @@ type Config struct {
 	DBPassword  string
 	DBPort      string
 	DBSchema    string
+	JWTSecret   string
 }
 
 func Load() *Config {
@@ -27,6 +28,7 @@ func Load() *Config {
 		DBPassword:  getEnv("DB_PASSWORD", "aquaflow_dev"),
 		DBPort:      getEnv("DB_PORT", "5432"),
 		DBSchema:    getEnv("DB_SCHEMA", "aquaflow"),
+		JWTSecret:   getEnv("JWT_SECRET", "your-secret-key-here"),
 	}
 }
 
