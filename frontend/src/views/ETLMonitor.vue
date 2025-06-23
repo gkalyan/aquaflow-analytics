@@ -33,7 +33,7 @@
             @click="toggleSidebar"
           />
           <span class="layout-topbar-separator"></span>
-          <div class="layout-topbar-item-text hidden lg:block">Dashboard</div>
+          <div class="layout-topbar-item-text hidden lg:block">ETL Monitor</div>
         </div>
 
         <div class="layout-topbar-end">
@@ -59,94 +59,7 @@
 
       <!-- Main Content -->
       <div class="layout-main">
-        <div class="card">
-          <!-- Welcome Section -->
-          <div class="text-center mb-6">
-            <h2 class="text-3xl font-bold text-900 mb-3">
-              Ask about your water system
-            </h2>
-            <p class="text-lg text-600 line-height-3 m-0">
-              Get operational answers in seconds, not minutes
-            </p>
-          </div>
-
-          <!-- Core Query Interface -->
-          <div class="max-w-4xl mx-auto">
-            <div class="grid">
-              <div class="col-12">
-                <div class="p-inputgroup mb-4">
-                  <InputText 
-                    v-model="query"
-                    @keyup.enter="submitQuery"
-                    placeholder="Ask about your water system... (e.g., 'morning check', 'main canal flow status')"
-                    class="w-full text-lg"
-                    style="padding: 1.25rem;"
-                  />
-                  <Button 
-                    icon="pi pi-search" 
-                    @click="submitQuery"
-                    :loading="loading"
-                    :disabled="!query.trim()"
-                    size="large"
-                    style="padding: 1.25rem 2rem;"
-                  />
-                </div>
-              </div>
-              
-              <!-- Quick Action Buttons -->
-              <div class="col-12">
-                <div class="flex flex-wrap gap-2 justify-content-center mb-4">
-                  <Button 
-                    label="Morning Check" 
-                    outlined 
-                    @click="quickQuery('morning check')"
-                    icon="pi pi-sun"
-                  />
-                  <Button 
-                    label="System Status" 
-                    outlined 
-                    @click="quickQuery('system status')"
-                    icon="pi pi-cog"
-                  />
-                  <Button 
-                    label="Canal Flow Status" 
-                    outlined 
-                    @click="quickQuery('main canal flow status')"
-                    icon="pi pi-chart-line"
-                  />
-                  <Button 
-                    label="Reservoir Levels" 
-                    outlined 
-                    @click="quickQuery('reservoir levels')"
-                    icon="pi pi-database"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <!-- Response Area -->
-            <div v-if="loading" class="text-center py-8">
-              <ProgressSpinner style="width: 60px; height: 60px" strokeWidth="4" />
-              <p class="mt-4 text-600 text-lg">Processing your question...</p>
-            </div>
-            
-            <div v-else-if="response" class="mt-6">
-              <Message severity="info" :closable="false" class="text-left">
-                <div class="flex align-items-start">
-                  <i class="pi pi-check-circle text-xl mr-3 mt-1"></i>
-                  <div class="flex-1">
-                    <h4 class="m-0 mb-3 text-900">Response</h4>
-                    <p class="m-0 line-height-3 text-700">{{ response }}</p>
-                    <div v-if="responseTime" class="text-500 text-sm mt-3">
-                      <i class="pi pi-clock mr-1"></i>
-                      Response time: {{ responseTime }}ms
-                    </div>
-                  </div>
-                </div>
-              </Message>
-            </div>
-          </div>
-        </div>
+        <ETLDashboard />
       </div>
     </div>
 
@@ -163,21 +76,19 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
 import { useAuthStore } from '../stores/auth'
 
-// PrimeVue Components
+// Components
 import Toast from 'primevue/toast'
 import Button from 'primevue/button'
 import PanelMenu from 'primevue/panelmenu'
 import Avatar from 'primevue/avatar'
-import InputText from 'primevue/inputtext'
-import ProgressSpinner from 'primevue/progressspinner'
-import Message from 'primevue/message'
 import OverlayPanel from 'primevue/overlaypanel'
 import Divider from 'primevue/divider'
+import ETLDashboard from '../components/ETLDashboard.vue'
 
 const router = useRouter()
 const toast = useToast()
@@ -186,12 +97,8 @@ const authStore = useAuthStore()
 // Refs
 const sidebarVisible = ref(false)
 const userMenu = ref()
-const query = ref('')
-const response = ref('')
-const loading = ref(false)
-const responseTime = ref(0)
 
-// Simplified menu focused on core functionality
+// Menu items (same as Dashboard)
 const menuItems = ref([
   {
     key: '0',
@@ -233,38 +140,6 @@ const toggleUserMenu = (event) => {
   userMenu.value.toggle(event)
 }
 
-const submitQuery = async () => {
-  if (!query.value.trim()) return
-  
-  loading.value = true
-  response.value = ''
-  
-  const startTime = Date.now()
-  
-  try {
-    // Simulate API call - will be replaced with real backend integration
-    await new Promise(resolve => setTimeout(resolve, 1200))
-    
-    response.value = `This is a demo response for: "${query.value}". The actual query processing system will be implemented to connect with your SCADA systems and provide real operational data from your water infrastructure.`
-    responseTime.value = Date.now() - startTime
-    
-  } catch (error) {
-    toast.add({ 
-      severity: 'error', 
-      summary: 'Error', 
-      detail: 'Failed to process query', 
-      life: 3000 
-    })
-  } finally {
-    loading.value = false
-  }
-}
-
-const quickQuery = (queryText) => {
-  query.value = queryText
-  submitQuery()
-}
-
 const handleLogout = async () => {
   await authStore.logout()
   toast.add({ 
@@ -277,10 +152,6 @@ const handleLogout = async () => {
     router.push('/login')
   }, 1000)
 }
-
-onMounted(() => {
-  // Initialize any core functionality
-})
 </script>
 
 <style scoped>

@@ -103,6 +103,31 @@ services:
     depends_on:
       - timescaledb
 
+  demo-data-service:
+    build: ../demo-data-service
+    container_name: demo-data-service
+    ports:
+      - "8090:8090"
+    environment:
+      PORT: 8090
+    networks:
+      - aquaflow-network
+    restart: unless-stopped
+
+  etl-workers:
+    build: ../etl-workers
+    container_name: etl-workers
+    environment:
+      DATABASE_URL: postgres://aquaflow:changeme@timescaledb:5432/aquaflowdb?sslmode=disable&search_path=aquaflow
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      demo-data-service:
+        condition: service_started
+    networks:
+      - aquaflow-network
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:
