@@ -1,9 +1,19 @@
-import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
+import { defineConfig } from "vite";
+import vue from "@vitejs/plugin-vue";
 import { resolve } from 'path'
+import Components from 'unplugin-vue-components/vite';
+import { PrimeVueResolver } from '@primevue/auto-import-resolver';
 
+// https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [vue()],
+	plugins: [
+		vue(),
+		Components({
+			resolvers: [
+				PrimeVueResolver()
+			]
+		})
+	],
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src')
@@ -14,7 +24,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://backend:3000',
+        target: 'http://localhost:3000',
         changeOrigin: true
       }
     }
@@ -22,4 +32,4 @@ export default defineConfig({
   test: {
     environment: 'jsdom'
   }
-})
+});
