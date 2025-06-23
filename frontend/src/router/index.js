@@ -15,6 +15,18 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/etl',
+    name: 'ETLMonitor',
+    component: () => import('../views/ETLMonitor.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/test',
+    name: 'PrimeVueTest',
+    component: () => import('../views/PrimeVueTest.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/:pathMatch(.*)*',
     redirect: '/'
   }

@@ -47,6 +47,13 @@ AquaFlow Analytics helps water operations managers like Olivia answer operationa
 - **Cache**: Redis
 - **Deployment**: Docker Compose
 
+## 📋 Project Status & Milestones
+
+- **📊 [View Detailed Milestones](docs/MILESTONES.md)** - Complete project roadmap with phases, success criteria, and technical details
+- **🚀 [Quick Progress Dashboard](docs/PROGRESS.md)** - Weekly updated status, completed features, and next steps
+
+**Current Status**: Phase 1 Complete (Authentication & UI) → Phase 2 Planning (Core Query System)
+
 ### Key Features
 
 - 🤖 Natural language query interface

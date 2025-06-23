@@ -59,6 +59,7 @@ func main() {
 
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(cfg.JWTSecret)
+	etlHandler := handlers.NewETLHandler(database)
 
 	// Auth routes (no middleware)
 	auth := r.Group("/api/auth")
@@ -116,6 +117,15 @@ func main() {
 				"status":  "not_implemented",
 			})
 		})
+
+		// ETL management endpoints
+		etl := api.Group("/etl")
+		{
+			etl.GET("/jobs", etlHandler.GetJobs)
+			etl.GET("/jobs/:id", etlHandler.GetJobDetails)
+			etl.GET("/jobs/:id/logs", etlHandler.GetJobLogs)
+			etl.POST("/jobs/:id/restart", etlHandler.RestartJob)
+		}
 	}
 
 	log.Printf("Starting AquaFlow Analytics API on port %s", cfg.Port)

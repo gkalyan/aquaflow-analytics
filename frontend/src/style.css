@@ -1,6 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Removed Tailwind imports to avoid conflicts with PrimeVue */
 
 /* Custom styles for AquaFlow */
 :root {
@@ -29,13 +27,22 @@ body {
   color: var(--text-color);
 }
 
-/* PrimeVue Component Overrides */
+/* PrimeVue Component Styling */
 .p-card {
   background: var(--surface-0);
   border: 1px solid var(--surface-border);
   border-radius: 8px;
   box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.08);
   margin-bottom: 1rem;
+  padding: 0;
+}
+
+.p-card-content {
+  padding: 1.5rem;
+}
+
+.p-card-body {
+  padding: 0;
 }
 
 .card {
