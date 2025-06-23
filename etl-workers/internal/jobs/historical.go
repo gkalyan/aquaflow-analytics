@@ -77,11 +77,19 @@ func (h *HistoricalLoadJob) Execute(ctx context.Context, job *db.ETLJob) error {
 
 	// Process each series
 	for _, seriesID := range seriesIDs {
-		h.logger.Infof(job.BatchID, "Loading data for series %d", seriesID)
+		h.logger.Info(job.BatchID, "Loading data for series", map[string]interface{}{
+			"series_id": seriesID,
+			"job_type":  job.JobType,
+			"job_name":  job.JobName,
+		})
 
 		processed, failed, err := h.loadSeriesData(ctx, job, sourceURL, seriesID, startDate, endDate, batchSize)
 		if err != nil {
-			h.logger.Errorf(job.BatchID, "Failed to load series %d: %v", seriesID, err)
+			h.logger.Error(job.BatchID, "Failed to load series data", map[string]interface{}{
+				"series_id": seriesID,
+				"job_name":  job.JobName,
+				"error":     err.Error(),
+			})
 			totalFailed += failed
 		}
 
@@ -130,8 +138,10 @@ func (h *HistoricalLoadJob) loadSeriesData(ctx context.Context, job *db.ETLJob, 
 		u.RawQuery = q.Encode()
 
 		h.logger.Debug(job.BatchID, "Fetching page", map[string]interface{}{
-			"url":  u.String(),
-			"page": page,
+			"url":       u.String(),
+			"page":      page,
+			"series_id": seriesID,
+			"job_name":  job.JobName,
 		})
 
 		// Fetch data
@@ -169,12 +179,23 @@ func (h *HistoricalLoadJob) loadSeriesData(ctx context.Context, job *db.ETLJob, 
 
 		// Insert batch
 		if err := h.db.InsertNumericValues(values); err != nil {
-			h.logger.Errorf(job.BatchID, "Failed to insert batch: %v", err)
+			h.logger.Error(job.BatchID, "Failed to insert batch", map[string]interface{}{
+				"series_id":    seriesID,
+				"page":         page,
+				"batch_size":   len(values),
+				"job_name":     job.JobName,
+				"error":        err.Error(),
+			})
 			failed += len(values)
 		} else {
 			processed += len(values)
-			h.logger.Infof(job.BatchID, "Inserted %d records for series %d (page %d)", 
-				len(values), seriesID, page)
+			h.logger.Info(job.BatchID, "Inserted records successfully", map[string]interface{}{
+				"series_id":    seriesID,
+				"page":         page,
+				"batch_size":   len(values),
+				"job_name":     job.JobName,
+				"records_inserted": len(values),
+			})
 		}
 
 		hasMore = histResp.HasMore

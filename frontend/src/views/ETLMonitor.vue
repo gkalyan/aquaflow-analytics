@@ -125,9 +125,22 @@ const menuItems = ref([
   },
   {
     key: '2',
-    label: 'ETL Monitor',
+    label: 'ETL System',
     icon: 'pi pi-fw pi-sync',
-    command: () => router.push('/etl')
+    items: [
+      {
+        key: '2_0',
+        label: 'Job Monitor',
+        icon: 'pi pi-fw pi-table',
+        command: () => router.push('/etl')
+      },
+      {
+        key: '2_1',
+        label: 'Live Logs',
+        icon: 'pi pi-fw pi-file-text',
+        command: () => router.push('/etl/logs')
+      }
+    ]
   }
 ])
 

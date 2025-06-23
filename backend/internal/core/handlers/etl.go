@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -260,5 +261,97 @@ func (h *ETLHandler) RestartJob(c *gin.Context) {
 		"message":       "Job restarted successfully",
 		"new_batch_id":  newBatchID.String(),
 		"original_id":   batchID,
+	})
+}
+
+// GetAllLogs returns logs from all ETL jobs with filtering options
+func (h *ETLHandler) GetAllLogs(c *gin.Context) {
+	jobName := c.Query("job_name")
+	logLevel := c.Query("level")
+	seriesID := c.Query("series_id")
+	since := c.Query("since")
+	limit := c.DefaultQuery("limit", "200")
+
+	query := `
+		SELECT l.log_id, l.batch_id, l.timestamp, l.log_level, l.message, l.context,
+			   j.job_name, j.job_type
+		FROM aquaflow.etl_job_logs l
+		JOIN aquaflow.etl_jobs j ON l.batch_id = j.batch_id
+		WHERE 1=1
+	`
+
+	args := []interface{}{}
+	argCount := 0
+
+	if jobName != "" {
+		argCount++
+		query += fmt.Sprintf(" AND j.job_name ILIKE $%d", argCount)
+		args = append(args, "%"+jobName+"%")
+	}
+
+	if logLevel != "" {
+		argCount++
+		query += fmt.Sprintf(" AND l.log_level = $%d", argCount)
+		args = append(args, logLevel)
+	}
+
+	if seriesID != "" {
+		argCount++
+		query += fmt.Sprintf(" AND l.context->>'series_id' = $%d", argCount)
+		args = append(args, seriesID)
+	}
+
+	if since != "" {
+		sinceTime, err := time.Parse(time.RFC3339, since)
+		if err == nil {
+			argCount++
+			query += fmt.Sprintf(" AND l.timestamp > $%d", argCount)
+			args = append(args, sinceTime)
+		}
+	}
+
+	query += " ORDER BY l.timestamp DESC LIMIT " + limit
+
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	defer rows.Close()
+
+	type LogWithJobInfo struct {
+		ETLJobLog
+		JobName string `json:"job_name"`
+		JobType string `json:"job_type"`
+	}
+
+	logs := []LogWithJobInfo{}
+	for rows.Next() {
+		var log LogWithJobInfo
+		var contextJSON []byte
+
+		err := rows.Scan(
+			&log.LogID, &log.BatchID, &log.Timestamp,
+			&log.LogLevel, &log.Message, &contextJSON,
+			&log.JobName, &log.JobType,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		// Parse context JSON
+		if len(contextJSON) > 0 {
+			if err := json.Unmarshal(contextJSON, &log.Context); err == nil {
+				// Parsed successfully
+			}
+		}
+
+		logs = append(logs, log)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"logs":  logs,
+		"count": len(logs),
 	})
 }

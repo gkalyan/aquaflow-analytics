@@ -21,6 +21,12 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/etl/logs',
+    name: 'ETLLogs',
+    component: () => import('../views/ETLLogs.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/test',
     name: 'PrimeVueTest',
     component: () => import('../views/PrimeVueTest.vue'),

@@ -125,6 +125,7 @@ func main() {
 			etl.GET("/jobs/:id", etlHandler.GetJobDetails)
 			etl.GET("/jobs/:id/logs", etlHandler.GetJobLogs)
 			etl.POST("/jobs/:id/restart", etlHandler.RestartJob)
+			etl.GET("/logs", etlHandler.GetAllLogs)
 		}
 	}
 

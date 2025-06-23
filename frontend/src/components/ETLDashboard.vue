@@ -4,9 +4,18 @@
       <div class="layout-card">
         <div class="flex justify-content-between align-items-center">
           <h2 class="text-900 font-bold text-2xl m-0">ETL Jobs Monitor</h2>
-          <div class="flex align-items-center gap-2">
-            <i class="pi pi-clock text-500"></i>
-            <span class="text-500">Next refresh in {{ countdown }}s</span>
+          <div class="flex align-items-center gap-3">
+            <Button 
+              label="View Live Logs" 
+              icon="pi pi-file-text" 
+              severity="secondary" 
+              size="small"
+              @click="$router.push('/etl/logs')"
+            />
+            <div class="flex align-items-center gap-2">
+              <i class="pi pi-clock text-500"></i>
+              <span class="text-500">Next refresh in {{ countdown }}s</span>
+            </div>
           </div>
         </div>
       </div>

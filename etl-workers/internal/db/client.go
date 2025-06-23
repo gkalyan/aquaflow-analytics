@@ -96,10 +96,10 @@ func (c *Client) UpdateJobStatus(batchID uuid.UUID, status string, recordsProces
 			records_processed = $3,
 			records_failed = $4,
 			error_message = $5,
-			completed_at = CASE WHEN $2 IN ('completed', 'failed', 'completed_with_errors') THEN NOW() ELSE NULL END
+			completed_at = CASE WHEN $6 IN ('completed', 'failed', 'completed_with_errors') THEN NOW() ELSE completed_at END
 		WHERE batch_id = $1
 	`
-	_, err := c.db.Exec(query, batchID, status, recordsProcessed, recordsFailed, errorMsg)
+	_, err := c.db.Exec(query, batchID, status, recordsProcessed, recordsFailed, errorMsg, status)
 	return err
 }
 

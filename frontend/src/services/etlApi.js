@@ -19,5 +19,10 @@ export const etlApi = {
   // Restart a failed job
   restartJob(jobId) {
     return api.post(`/etl/jobs/${jobId}/restart`)
+  },
+
+  // Get all logs with optional filtering
+  getAllLogs(params = {}) {
+    return api.get('/etl/logs', { params })
   }
 }
