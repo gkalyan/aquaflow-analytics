@@ -90,16 +90,35 @@ func (c *Client) GetNextPendingJob() (*ETLJob, error) {
 }
 
 func (c *Client) UpdateJobStatus(batchID uuid.UUID, status string, recordsProcessed, recordsFailed int, errorMsg *string) error {
+	// Use separate queries to avoid parameter type confusion
 	query := `
 		UPDATE aquaflow.etl_jobs 
 		SET status = $2, 
 			records_processed = $3,
 			records_failed = $4,
-			error_message = $5,
-			completed_at = CASE WHEN $6 IN ('completed', 'failed', 'completed_with_errors') THEN NOW() ELSE completed_at END
+			error_message = $5
 		WHERE batch_id = $1
 	`
-	_, err := c.db.Exec(query, batchID, status, recordsProcessed, recordsFailed, errorMsg, status)
+	
+	// Handle nil error message properly
+	var errorParam interface{}
+	if errorMsg != nil {
+		errorParam = *errorMsg
+	} else {
+		errorParam = nil
+	}
+	
+	_, err := c.db.Exec(query, batchID, status, recordsProcessed, recordsFailed, errorParam)
+	if err != nil {
+		return err
+	}
+	
+	// Update completed_at separately for terminal statuses
+	if status == "completed" || status == "failed" || status == "completed_with_errors" {
+		completedQuery := `UPDATE aquaflow.etl_jobs SET completed_at = NOW() WHERE batch_id = $1`
+		_, err = c.db.Exec(completedQuery, batchID)
+	}
+	
 	return err
 }
 
