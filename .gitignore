@@ -3,6 +3,7 @@
 /backend/.env
 /backend/tmp/
 /backend/air_errors.log
+/backend/api
 *.exe
 *.exe~
 *.dll
