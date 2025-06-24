@@ -1,8 +1,10 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -34,20 +36,23 @@ func NewClient(db *sql.DB) *Client {
 func (c *Client) GetNextPendingJob() (*ETLJob, error) {
 	tx, err := c.db.Begin()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
 
 	var job ETLJob
 	var paramsJSON []byte
 
-	// Lock the job for processing
+	// Lock the job run for processing (check both old and new tables for backward compatibility)
 	query := `
-		SELECT batch_id, job_name, job_type, load_type, status, parameters, 
-			   records_processed, records_failed, started_at
-		FROM aquaflow.etl_jobs
-		WHERE status = 'pending'
-		ORDER BY started_at ASC
+		SELECT r.run_id as batch_id, r.run_name as job_name, j.job_type, 'scheduled' as load_type, 
+			   r.status, COALESCE(r.runtime_parameters, j.parameters) as parameters,
+			   r.records_processed, r.records_failed, r.started_at
+		FROM aquaflow.etl_job_runs r
+		JOIN aquaflow.etl_jobs_v2 j ON r.job_id = j.job_id
+		WHERE r.status = 'queued'
+		  AND j.is_active = true
+		ORDER BY r.started_at ASC
 		LIMIT 1
 		FOR UPDATE SKIP LOCKED
 	`
@@ -74,9 +79,9 @@ func (c *Client) GetNextPendingJob() (*ETLJob, error) {
 
 	// Update status to running
 	updateQuery := `
-		UPDATE aquaflow.etl_jobs 
-		SET status = 'running', started_at = NOW()
-		WHERE batch_id = $1
+		UPDATE aquaflow.etl_job_runs 
+		SET status = 'running', started_at = NOW(), updated_at = NOW()
+		WHERE run_id = $1
 	`
 	if _, err := tx.Exec(updateQuery, job.BatchID); err != nil {
 		return nil, err
@@ -90,14 +95,15 @@ func (c *Client) GetNextPendingJob() (*ETLJob, error) {
 }
 
 func (c *Client) UpdateJobStatus(batchID uuid.UUID, status string, recordsProcessed, recordsFailed int, errorMsg *string) error {
-	// Use separate queries to avoid parameter type confusion
+	// Try to update job run first (new architecture)
 	query := `
-		UPDATE aquaflow.etl_jobs 
+		UPDATE aquaflow.etl_job_runs 
 		SET status = $2, 
 			records_processed = $3,
 			records_failed = $4,
-			error_message = $5
-		WHERE batch_id = $1
+			error_message = $5,
+			updated_at = NOW()
+		WHERE run_id = $1
 	`
 	
 	// Handle nil error message properly
@@ -108,15 +114,47 @@ func (c *Client) UpdateJobStatus(batchID uuid.UUID, status string, recordsProces
 		errorParam = nil
 	}
 	
-	_, err := c.db.Exec(query, batchID, status, recordsProcessed, recordsFailed, errorParam)
+	result, err := c.db.Exec(query, batchID, status, recordsProcessed, recordsFailed, errorParam)
 	if err != nil {
 		return err
 	}
 	
+	// Check if any rows were affected (run exists in new table)
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	
+	// If no rows affected, try the old table for backward compatibility
+	if rowsAffected == 0 {
+		oldQuery := `
+			UPDATE aquaflow.etl_jobs 
+			SET status = $2, 
+				records_processed = $3,
+				records_failed = $4,
+				error_message = $5
+			WHERE batch_id = $1
+		`
+		_, err = c.db.Exec(oldQuery, batchID, status, recordsProcessed, recordsFailed, errorParam)
+		if err != nil {
+			return err
+		}
+	}
+	
 	// Update completed_at separately for terminal statuses
 	if status == "completed" || status == "failed" || status == "completed_with_errors" {
-		completedQuery := `UPDATE aquaflow.etl_jobs SET completed_at = NOW() WHERE batch_id = $1`
-		_, err = c.db.Exec(completedQuery, batchID)
+		// Try new table first
+		completedQuery := `UPDATE aquaflow.etl_job_runs SET completed_at = NOW() WHERE run_id = $1`
+		result, err = c.db.Exec(completedQuery, batchID)
+		if err != nil {
+			return err
+		}
+		
+		// If no rows affected, try old table
+		if rowsAffected, _ := result.RowsAffected(); rowsAffected == 0 {
+			oldCompletedQuery := `UPDATE aquaflow.etl_jobs SET completed_at = NOW() WHERE batch_id = $1`
+			_, err = c.db.Exec(oldCompletedQuery, batchID)
+		}
 	}
 	
 	return err
@@ -159,4 +197,35 @@ type NumericValue struct {
 	Timestamp time.Time
 	SeriesID  int
 	Value     float64
+}
+
+// HealthCheck verifies database connectivity
+func (c *Client) HealthCheck(ctx context.Context) error {
+	return c.db.PingContext(ctx)
+}
+
+// IncrementRetryCount increments the retry count for a failed job
+func (c *Client) IncrementRetryCount(batchID uuid.UUID) error {
+	query := `
+		UPDATE aquaflow.etl_jobs 
+		SET retry_count = COALESCE(retry_count, 0) + 1,
+		    last_retry_at = NOW()
+		WHERE batch_id = $1
+	`
+	_, err := c.db.Exec(query, batchID)
+	return err
+}
+
+// GetJobRetryCount returns the current retry count for a job
+func (c *Client) GetJobRetryCount(batchID uuid.UUID) (int, error) {
+	var count sql.NullInt64
+	query := `SELECT retry_count FROM aquaflow.etl_jobs WHERE batch_id = $1`
+	err := c.db.QueryRow(query, batchID).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	if count.Valid {
+		return int(count.Int64), nil
+	}
+	return 0, nil
 }

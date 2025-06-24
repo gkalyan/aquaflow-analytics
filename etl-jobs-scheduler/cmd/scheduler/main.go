@@ -10,9 +10,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/aquaflow/etl-workers/internal/db"
-	"github.com/aquaflow/etl-workers/internal/jobs"
-	"github.com/aquaflow/etl-workers/internal/logger"
+	"github.com/aquaflow/etl-jobs-scheduler/internal/db"
+	"github.com/aquaflow/etl-jobs-scheduler/internal/scheduler"
 	_ "github.com/lib/pq"
 )
 
@@ -62,8 +61,8 @@ func connectWithRetry(dbURL string, maxRetries int) (*sql.DB, error) {
 		}
 		
 		// Configure connection pool
-		database.SetMaxOpenConns(10)
-		database.SetMaxIdleConns(5)
+		database.SetMaxOpenConns(5)  // Scheduler doesn't need many connections
+		database.SetMaxIdleConns(2)
 		database.SetConnMaxLifetime(time.Hour)
 		
 		log.Println("Successfully connected to database")
@@ -75,6 +74,8 @@ func connectWithRetry(dbURL string, maxRetries int) (*sql.DB, error) {
 
 func main() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
+	
+	log.Println("ETL Jobs Scheduler starting up...")
 	
 	// Database connection
 	dbURL := os.Getenv("DATABASE_URL")
@@ -91,10 +92,8 @@ func main() {
 
 	// Initialize components
 	dbClient := db.NewClient(database)
-	etlLogger := logger.NewETLLogger(database)
-	
-	// Create job processor
-	processor := jobs.NewProcessor(dbClient, etlLogger)
+	schedulerLogger := log.New(os.Stdout, "[SCHEDULER] ", log.LstdFlags)
+	schedulerInstance := scheduler.NewScheduler(dbClient, schedulerLogger)
 
 	// Setup graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
@@ -105,16 +104,26 @@ func main() {
 
 	go func() {
 		<-sigChan
-		log.Println("Shutdown signal received, stopping worker...")
+		log.Println("Shutdown signal received, stopping scheduler...")
 		cancel()
 	}()
 
-	log.Println("ETL Worker started successfully")
-	log.Printf("Worker configuration: PollInterval=5s, MaxConnections=%d", 10)
+	// Configuration
+	checkInterval := 30 * time.Second // Check for due jobs every 30 seconds
+	if intervalEnv := os.Getenv("SCHEDULER_CHECK_INTERVAL"); intervalEnv != "" {
+		if parsed, err := time.ParseDuration(intervalEnv); err == nil {
+			checkInterval = parsed
+		} else {
+			log.Printf("WARNING: Invalid SCHEDULER_CHECK_INTERVAL '%s', using default %v", intervalEnv, checkInterval)
+		}
+	}
+
+	log.Printf("ETL Jobs Scheduler started successfully")
+	log.Printf("Configuration: CheckInterval=%v, MaxConnections=%d", checkInterval, 5)
 
 	// Health check goroutine
 	go func() {
-		healthTicker := time.NewTicker(30 * time.Second)
+		healthTicker := time.NewTicker(5 * time.Minute) // Health check every 5 minutes
 		defer healthTicker.Stop()
 		
 		for {
@@ -125,42 +134,23 @@ func main() {
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				if err := database.PingContext(ctx); err != nil {
 					log.Printf("WARNING: Database health check failed: %v", err)
+				} else {
+					// Log active templates count
+					if count, err := dbClient.GetActiveSchedulesCount(); err == nil {
+						log.Printf("Health check OK - monitoring %d active schedules", count)
+					}
 				}
 				cancel()
 			}
 		}
 	}()
 
-	// Main processing loop
-	ticker := time.NewTicker(5 * time.Second) // Poll every 5 seconds
-	defer ticker.Stop()
-
-	consecutiveErrors := 0
-	maxConsecutiveErrors := 5
-
-	for {
-		select {
-		case <-ctx.Done():
-			log.Println("Shutdown complete")
-			return
-		case <-ticker.C:
-			if err := processor.ProcessNextJob(ctx); err != nil {
-				if err != jobs.ErrNoJobsAvailable {
-					consecutiveErrors++
-					log.Printf("Error processing job (consecutive errors: %d): %v", consecutiveErrors, err)
-					
-					if consecutiveErrors >= maxConsecutiveErrors {
-						log.Printf("CRITICAL: Too many consecutive errors (%d), backing off for 30 seconds", consecutiveErrors)
-						time.Sleep(30 * time.Second)
-						consecutiveErrors = 0
-					}
-				}
-			} else {
-				// Reset error counter on successful processing
-				if consecutiveErrors > 0 {
-					consecutiveErrors = 0
-				}
-			}
+	// Start the scheduler
+	if err := schedulerInstance.Start(ctx, checkInterval); err != nil {
+		if err == context.Canceled {
+			log.Println("Scheduler shutdown completed")
+		} else {
+			log.Printf("Scheduler error: %v", err)
 		}
 	}
 }

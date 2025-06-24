@@ -38,20 +38,69 @@ type HistoricalResponse struct {
 func (h *DataHandler) GetHistoricalData(c *gin.Context) {
 	var req HistoricalRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid request parameters",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Validate series ID range (1-12 for water operations)
+	if req.SeriesID < 1 || req.SeriesID > 12 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid series_id",
+			"details": "series_id must be between 1 and 12",
+		})
+		return
+	}
+
+	// Validate pagination parameters
+	if req.Page < 1 {
+		req.Page = 1
+	}
+	if req.Limit < 1 || req.Limit > 10000 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid limit",
+			"details": "limit must be between 1 and 10000",
+		})
 		return
 	}
 
 	// Parse dates
 	startDate, err := time.Parse("2006-01-02", req.StartDate)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid start_date format"})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid start_date format",
+			"details": "use YYYY-MM-DD format",
+		})
 		return
 	}
 
 	endDate, err := time.Parse("2006-01-02", req.EndDate)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid end_date format"})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid end_date format", 
+			"details": "use YYYY-MM-DD format",
+		})
+		return
+	}
+
+	// Validate date range
+	if endDate.Before(startDate) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid date range",
+			"details": "end_date must be after start_date",
+		})
+		return
+	}
+
+	// Limit date range to prevent excessive data generation
+	maxRange := 365 * 24 * time.Hour // 1 year
+	if endDate.Sub(startDate) > maxRange {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Date range too large",
+			"details": "maximum range is 365 days",
+		})
 		return
 	}
 
@@ -93,19 +142,37 @@ func (h *DataHandler) GetHistoricalData(c *gin.Context) {
 func (h *DataHandler) GetRealtimeData(c *gin.Context) {
 	seriesIDStr := c.Query("series_id")
 	if seriesIDStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "series_id is required"})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Missing required parameter",
+			"details": "series_id is required",
+		})
 		return
 	}
 
 	seriesID, err := strconv.Atoi(seriesIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid series_id"})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid series_id format",
+			"details": "series_id must be a valid integer",
+		})
+		return
+	}
+
+	// Validate series ID range
+	if seriesID < 1 || seriesID > 12 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid series_id",
+			"details": "series_id must be between 1 and 12",
+		})
 		return
 	}
 
 	data := h.generator.GenerateRealtimeData(seriesID)
 	if data == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "series not found"})
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "Series not found",
+			"details": "No data available for the specified series_id",
+		})
 		return
 	}
 

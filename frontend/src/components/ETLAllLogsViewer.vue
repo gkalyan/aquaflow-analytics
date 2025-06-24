@@ -5,10 +5,14 @@
       <div class="layout-card">
         <div class="flex justify-content-between align-items-center mb-4">
           <h2 class="text-900 font-bold text-2xl m-0">ETL Job Logs</h2>
-          <div class="flex align-items-center gap-2">
-            <i class="pi pi-clock text-500"></i>
-            <span class="text-500">Next refresh in {{ countdown }}s</span>
-          </div>
+          <RefreshIntervalSelector 
+            :default-interval="30000"
+            size="small"
+            storage-key="etl-logs-refresh"
+            @interval-changed="onIntervalChanged"
+            @manual-refresh="onManualRefresh"
+            ref="refreshSelector"
+          />
         </div>
 
         <!-- Filters -->
@@ -150,12 +154,14 @@
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
 import { etlApi } from '../services/etlApi'
+import RefreshIntervalSelector from './RefreshIntervalSelector.vue'
 
 // Data
 const logs = ref([])
 const loading = ref(false)
-const countdown = ref(5)
 const autoScroll = ref(true)
+const refreshSelector = ref(null)
+const currentInterval = ref(30000) // Default 30 seconds
 
 let intervalId = null
 
@@ -220,7 +226,9 @@ const fetchLogs = async () => {
 
 const refreshLogs = () => {
   fetchLogs()
-  countdown.value = 5
+  if (refreshSelector.value) {
+    refreshSelector.value.resetCountdown()
+  }
 }
 
 const applyFilters = () => {
@@ -268,14 +276,12 @@ const getRowClass = (data) => {
   }
 }
 
-const startPolling = () => {
+const startPolling = (interval = currentInterval.value) => {
+  stopPolling()
+  
   intervalId = setInterval(() => {
-    countdown.value--
-    if (countdown.value <= 0) {
-      fetchLogs()
-      countdown.value = 5
-    }
-  }, 1000)
+    fetchLogs()
+  }, interval)
 }
 
 const stopPolling = () => {
@@ -285,10 +291,19 @@ const stopPolling = () => {
   }
 }
 
+const onIntervalChanged = (newInterval) => {
+  currentInterval.value = newInterval
+  startPolling(newInterval)
+}
+
+const onManualRefresh = () => {
+  fetchLogs()
+}
+
 // Lifecycle
 onMounted(() => {
   fetchLogs()
-  startPolling()
+  // Polling will be started by the RefreshIntervalSelector component
 })
 
 onUnmounted(() => {

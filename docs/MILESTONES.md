@@ -56,12 +56,14 @@
   - Real-time data synchronization
   - Job queue processing with status tracking
   - Error handling and retry mechanisms
+  - Production-grade resilience with connection retry logic
 
 - [x] **Real-Time ETL Monitoring**
-  - Live ETL job status dashboard with 5-second refresh
-  - Comprehensive log viewer with filtering capabilities
+  - Live ETL job status dashboard with configurable refresh (5s-15m)
+  - Comprehensive log viewer with time window filtering
   - Job progress tracking and error reporting
   - Professional PrimeVue interface with auto-scroll
+  - Job frequency and next run time display
 
 - [x] **Database Schema & Time-Series Optimization**
   - TimescaleDB hypertables for optimal time-series performance
@@ -69,11 +71,20 @@
   - Series management for water infrastructure data
   - Proper indexing for sub-second query performance
 
+- [x] **Three-Tier ETL Architecture**
+  - Elegant job/schedule/run separation (Microsoft Power Automate style)
+  - Job definitions, schedules, and execution runs properly decoupled
+  - Automated scheduler service for job execution
+  - Run number tracking and grouping by parent job
+  - Complete migration from legacy architecture
+
 #### Success Metrics
 - ✅ ETL workers processing data successfully without errors
 - ✅ Real-time monitoring operational with current timestamps
 - ✅ 70,297 historical records loaded and validated
 - ✅ Sub-second database query performance achieved
+- ✅ Three-tier architecture fully operational
+- ✅ ETL jobs datatable populated with run tracking
 
 ---
 
@@ -205,9 +216,12 @@
 - Responsive dashboard with sidebar navigation
 - Docker development environment
 - Complete ETL data pipeline with demo service
-- Real-time ETL monitoring with live logs
+- Real-time ETL monitoring with configurable refresh intervals
 - TimescaleDB optimization with 70K+ records
-- ETL workers system with job queue processing
+- ETL workers system with production-grade resilience
+- Three-tier ETL architecture (jobs/schedules/runs)
+- Automated job scheduler service
+- Run number tracking and grouped job view
 
 ### 🚧 **In Progress (Phase 2)**
 - Core query system foundation ready
@@ -306,6 +320,6 @@ curl http://localhost:3000/health
 
 ---
 
-*Last Updated: June 23, 2025*  
+*Last Updated: June 24, 2025*  
 *Next Review: Weekly on Fridays*  
-*Project Status: Phase 1.5 Complete, Phase 2 Foundation Ready*
+*Project Status: Phase 1.5 Complete with Three-Tier ETL Architecture, Phase 2 Foundation Ready*

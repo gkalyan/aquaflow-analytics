@@ -121,11 +121,17 @@ func main() {
 		// ETL management endpoints
 		etl := api.Group("/etl")
 		{
+			// Legacy endpoints (job runs displayed as jobs)
 			etl.GET("/jobs", etlHandler.GetJobs)
 			etl.GET("/jobs/:id", etlHandler.GetJobDetails)
 			etl.GET("/jobs/:id/logs", etlHandler.GetJobLogs)
 			etl.POST("/jobs/:id/restart", etlHandler.RestartJob)
 			etl.GET("/logs", etlHandler.GetAllLogs)
+			
+			// New three-tier architecture endpoints
+			etl.GET("/job-definitions", etlHandler.GetJobDefinitions)
+			etl.GET("/schedules", etlHandler.GetSchedules)
+			etl.GET("/runs", etlHandler.GetJobRuns)
 		}
 	}
 

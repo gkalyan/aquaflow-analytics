@@ -1,22 +1,42 @@
 <template>
   <div class="etl-log-viewer bg-white rounded-lg shadow">
-    <div class="px-4 py-3 border-b border-gray-200 flex justify-between items-center">
-      <h3 class="text-lg font-semibold">Job Logs</h3>
-      <div class="flex items-center gap-2">
-        <label class="flex items-center">
-          <input 
-            type="checkbox" 
-            v-model="autoScroll"
-            class="mr-2"
+    <div class="px-4 py-3 border-b border-gray-200">
+      <div class="flex justify-between items-center mb-2">
+        <h3 class="text-lg font-semibold">Job Logs</h3>
+        <div class="flex items-center gap-3">
+          <div class="flex items-center gap-2">
+            <label class="text-sm font-medium">Time Window:</label>
+            <select 
+              v-model="timeWindow" 
+              @change="onTimeWindowChange"
+              class="text-sm border border-gray-300 rounded px-2 py-1"
+            >
+              <option value="30">Last 30s</option>
+              <option value="60">Last 1m</option>
+              <option value="300">Last 5m</option>
+              <option value="900">Last 15m</option>
+              <option value="all">All logs</option>
+            </select>
+          </div>
+          <label class="flex items-center">
+            <input 
+              type="checkbox" 
+              v-model="autoScroll"
+              class="mr-2"
+            >
+            <span class="text-sm">Auto-scroll</span>
+          </label>
+          <button 
+            @click="clearLogs"
+            class="text-sm px-3 py-1 bg-gray-500 text-white rounded hover:bg-gray-600"
           >
-          <span class="text-sm">Auto-scroll</span>
-        </label>
-        <button 
-          @click="clearLogs"
-          class="text-sm px-3 py-1 bg-gray-500 text-white rounded hover:bg-gray-600"
-        >
-          Clear
-        </button>
+            Clear
+          </button>
+        </div>
+      </div>
+      <div class="flex justify-between items-center text-sm text-gray-500">
+        <span>{{ getTimeWindowDescription() }}</span>
+        <span>{{ filteredLogs.length }} logs in window</span>
       </div>
     </div>
     
@@ -28,13 +48,13 @@
         <span class="text-gray-400">Loading logs...</span>
       </div>
       
-      <div v-else-if="logs.length === 0" class="text-center py-4">
-        <span class="text-gray-400">No logs available</span>
+      <div v-else-if="filteredLogs.length === 0" class="text-center py-4">
+        <span class="text-gray-400">No logs available in time window</span>
       </div>
       
       <div v-else>
         <div 
-          v-for="log in logs" 
+          v-for="log in filteredLogs" 
           :key="log.log_id"
           class="mb-1 flex"
         >
@@ -48,7 +68,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { etlApi } from '@/services/etlApi'
 
 const props = defineProps({
@@ -64,6 +84,17 @@ const autoScroll = ref(true)
 const logContainer = ref(null)
 const pollInterval = ref(null)
 const lastLogTimestamp = ref(null)
+const timeWindow = ref(300) // Default 5 minutes
+
+// Computed property for filtered logs based on time window
+const filteredLogs = computed(() => {
+  if (timeWindow.value === 'all') {
+    return logs.value
+  }
+  
+  const cutoffTime = new Date(Date.now() - (timeWindow.value * 1000))
+  return logs.value.filter(log => new Date(log.timestamp) >= cutoffTime)
+})
 
 const getLogLevelClass = (level) => {
   const classes = {
@@ -124,6 +155,49 @@ const clearLogs = () => {
   lastLogTimestamp.value = null
 }
 
+const getTimeWindowDescription = () => {
+  const descriptions = {
+    '30': 'Showing logs from last 30 seconds',
+    '60': 'Showing logs from last 1 minute', 
+    '300': 'Showing logs from last 5 minutes',
+    '900': 'Showing logs from last 15 minutes',
+    'all': 'Showing all logs'
+  }
+  return descriptions[timeWindow.value] || 'Showing filtered logs'
+}
+
+const onTimeWindowChange = () => {
+  // Save preference to localStorage
+  localStorage.setItem('etl-log-viewer-time-window', timeWindow.value.toString())
+  
+  // Prune logs if window got smaller
+  if (timeWindow.value !== 'all') {
+    pruneLogs()
+  }
+}
+
+const pruneLogs = () => {
+  if (timeWindow.value === 'all') return
+  
+  const cutoffTime = new Date(Date.now() - (timeWindow.value * 1000))
+  const oldLogCount = logs.value.length
+  
+  // Keep only logs within the time window, plus a small buffer for smooth transitions
+  logs.value = logs.value.filter(log => new Date(log.timestamp) >= cutoffTime)
+  
+  // If we pruned logs, update the last timestamp
+  if (logs.value.length < oldLogCount && logs.value.length > 0) {
+    lastLogTimestamp.value = logs.value[0].timestamp
+  }
+}
+
+const loadSavedPreferences = () => {
+  const saved = localStorage.getItem('etl-log-viewer-time-window')
+  if (saved && (saved === 'all' || !isNaN(Number(saved)))) {
+    timeWindow.value = saved === 'all' ? 'all' : Number(saved)
+  }
+}
+
 const startPolling = () => {
   // Initial fetch
   fetchLogs()
@@ -134,6 +208,11 @@ const startPolling = () => {
       fetchLogs(lastLogTimestamp.value)
     } else {
       fetchLogs()
+    }
+    
+    // Prune old logs periodically to prevent memory bloat
+    if (timeWindow.value !== 'all') {
+      pruneLogs()
     }
   }, 1000)
 }
@@ -154,6 +233,7 @@ watch(() => props.jobId, (newJobId) => {
 })
 
 onMounted(() => {
+  loadSavedPreferences()
   if (props.jobId) {
     startPolling()
   }

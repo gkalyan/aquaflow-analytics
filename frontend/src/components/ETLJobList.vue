@@ -10,7 +10,19 @@
       @rowSelect="onRowSelect"
       class="etl-jobs-table"
     >
-      <Column field="job_name" header="Job Name" sortable></Column>
+      <Column field="job_name" header="Job Name" sortable>
+        <template #body="{ data }">
+          <div>
+            <div class="font-medium">{{ getBaseJobName(data.job_name) }}</div>
+            <div class="text-500 text-sm">{{ getRunTimestamp(data.job_name) }}</div>
+          </div>
+        </template>
+      </Column>
+      <Column field="run_number" header="Run #" style="width: 80px">
+        <template #body="{ data }">
+          <span class="text-sm font-medium">#{{ getRunNumber(data) }}</span>
+        </template>
+      </Column>
       <Column field="job_type" header="Type" sortable></Column>
       <Column field="status" header="Status">
         <template #body="{ data }">
@@ -33,6 +45,24 @@
       <Column field="started_at" header="Started">
         <template #body="{ data }">
           {{ formatTime(data.started_at) }}
+        </template>
+      </Column>
+      <Column field="schedule" header="Schedule" style="min-width: 120px">
+        <template #body="{ data }">
+          <div v-if="data.schedule" class="text-sm">
+            <div class="font-medium">{{ formatSchedule(data.schedule) }}</div>
+          </div>
+          <span v-else class="text-500 text-sm">Manual</span>
+        </template>
+      </Column>
+      <Column field="next_run" header="Next Load" style="min-width: 130px">
+        <template #body="{ data }">
+          <div v-if="data.next_run && data.status !== 'running'" class="text-sm">
+            <div class="font-medium">{{ formatNextRun(data.next_run) }}</div>
+            <div class="text-500 text-xs">{{ formatTimeUntilNext(data.next_run) }}</div>
+          </div>
+          <span v-else-if="data.status === 'running'" class="text-500 text-sm">Running now</span>
+          <span v-else class="text-500 text-sm">-</span>
         </template>
       </Column>
       <Column header="Actions">
@@ -124,5 +154,86 @@ const restartJob = async (batchId) => {
       life: 3000 
     })
   }
+}
+
+const formatSchedule = (schedule) => {
+  if (!schedule) return 'Manual'
+  
+  // Handle common cron patterns and custom formats
+  const scheduleMap = {
+    '*/15 * * * *': 'Every 15m',
+    '0 * * * *': 'Hourly',
+    '0 */2 * * *': 'Every 2h',
+    '0 */6 * * *': 'Every 6h',
+    '0 2 * * *': 'Daily at 2AM',
+    '0 0 * * 0': 'Weekly',
+    '0 0 1 * *': 'Monthly'
+  }
+  
+  return scheduleMap[schedule] || schedule
+}
+
+const formatNextRun = (nextRun) => {
+  if (!nextRun) return '-'
+  const date = new Date(nextRun)
+  return date.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+const formatTimeUntilNext = (nextRun) => {
+  if (!nextRun) return ''
+  
+  const now = new Date()
+  const next = new Date(nextRun)
+  const diff = next - now
+  
+  if (diff <= 0) return 'Overdue'
+  
+  const minutes = Math.floor(diff / 60000)
+  const hours = Math.floor(minutes / 60)
+  const days = Math.floor(hours / 24)
+  
+  if (days > 0) return `in ${days}d ${hours % 24}h`
+  if (hours > 0) return `in ${hours}h ${minutes % 60}m`
+  if (minutes > 0) return `in ${minutes}m`
+  
+  return 'in <1m'
+}
+
+const getBaseJobName = (jobName) => {
+  // Extract base job name without timestamp
+  // Examples: "Hourly Flow Sync - 2025-06-24 07:00" -> "Hourly Flow Sync"
+  //          "Real-time Data Sync (Manual)" -> "Real-time Data Sync"
+  const match = jobName.match(/^(.+?)\s*[-\(]/)
+  return match ? match[1].trim() : jobName
+}
+
+const getRunTimestamp = (jobName) => {
+  // Extract timestamp or manual indicator
+  const timestampMatch = jobName.match(/- (\d{4}-\d{2}-\d{2} \d{2}:\d{2})/)
+  if (timestampMatch) {
+    const date = new Date(timestampMatch[1])
+    return date.toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+  
+  if (jobName.includes('(Manual)')) {
+    return 'Manual Run'
+  }
+  
+  return ''
+}
+
+const getRunNumber = (job) => {
+  // Use the run_number from the backend if available
+  return job.run_number || 1
 }
 </script>

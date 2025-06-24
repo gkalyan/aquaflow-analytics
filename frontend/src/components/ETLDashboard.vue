@@ -12,10 +12,14 @@
               size="small"
               @click="$router.push('/etl/logs')"
             />
-            <div class="flex align-items-center gap-2">
-              <i class="pi pi-clock text-500"></i>
-              <span class="text-500">Next refresh in {{ countdown }}s</span>
-            </div>
+            <RefreshIntervalSelector 
+              :default-interval="30000"
+              size="small"
+              storage-key="etl-dashboard-refresh"
+              @interval-changed="onIntervalChanged"
+              @manual-refresh="onManualRefresh"
+              ref="refreshSelector"
+            />
           </div>
         </div>
       </div>
@@ -77,7 +81,7 @@
 
       <!-- Job List -->
       <div class="layout-card">
-        <ETLJobList 
+        <ETLJobsGrouped 
           :jobs="jobs" 
           @select-job="selectedJobId = $event"
         />
@@ -96,14 +100,15 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { etlApi } from '@/services/etlApi'
-import ETLJobList from './ETLJobList.vue'
+import ETLJobsGrouped from './ETLJobsGrouped.vue'
 import ETLLogViewer from './ETLLogViewer.vue'
+import RefreshIntervalSelector from './RefreshIntervalSelector.vue'
 
 const jobs = ref([])
 const selectedJobId = ref(null)
 const refreshInterval = ref(null)
-const countdownInterval = ref(null)
-const countdown = ref(5)
+const refreshSelector = ref(null)
+const currentInterval = ref(30000) // Default 30 seconds
 
 const runningCount = computed(() => 
   jobs.value.filter(j => j.status === 'running').length
@@ -127,22 +132,13 @@ const fetchJobs = async () => {
   }
 }
 
-const startPolling = () => {
-  // Reset countdown
-  countdown.value = 5
+const startPolling = (interval = currentInterval.value) => {
+  stopPolling()
   
-  // Set up countdown timer (every 1 second)
-  countdownInterval.value = setInterval(() => {
-    countdown.value--
-    if (countdown.value <= 0) {
-      countdown.value = 5
-    }
-  }, 1000)
-  
-  // Set up data refresh timer (every 5 seconds)
+  // Set up data refresh timer with the specified interval
   refreshInterval.value = setInterval(() => {
     fetchJobs()
-  }, 5000)
+  }, interval)
 }
 
 const stopPolling = () => {
@@ -150,15 +146,23 @@ const stopPolling = () => {
     clearInterval(refreshInterval.value)
     refreshInterval.value = null
   }
-  if (countdownInterval.value) {
-    clearInterval(countdownInterval.value) 
-    countdownInterval.value = null
+}
+
+const onIntervalChanged = (newInterval) => {
+  currentInterval.value = newInterval
+  startPolling(newInterval)
+}
+
+const onManualRefresh = () => {
+  fetchJobs()
+  if (refreshSelector.value) {
+    refreshSelector.value.resetCountdown()
   }
 }
 
 onMounted(() => {
   fetchJobs()
-  startPolling()
+  // Polling will be started by the RefreshIntervalSelector component
 })
 
 onUnmounted(() => {
