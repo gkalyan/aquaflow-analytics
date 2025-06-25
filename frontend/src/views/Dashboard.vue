@@ -167,6 +167,8 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
 import { useAuthStore } from '../stores/auth'
+import chatApi from '../services/chatApi'
+import { v4 as uuidv4 } from 'uuid'
 
 // PrimeVue Components
 import Toast from 'primevue/toast'
@@ -191,6 +193,10 @@ const response = ref('')
 const loading = ref(false)
 const responseTime = ref(0)
 
+// Chat session management
+const sessionId = ref(uuidv4())
+const userId = ref(null)
+
 // Simplified menu focused on core functionality
 const menuItems = ref([
   {
@@ -206,11 +212,17 @@ const menuItems = ref([
     items: [
       {
         key: '1_0',
+        label: 'Chat Assistant',
+        icon: 'pi pi-fw pi-comments',
+        command: () => router.push('/chat')
+      },
+      {
+        key: '1_1',
         label: 'Natural Language',
         icon: 'pi pi-fw pi-comment'
       },
       {
-        key: '1_1',
+        key: '1_2',
         label: 'Quick Templates',
         icon: 'pi pi-fw pi-list'
       }
@@ -242,19 +254,56 @@ const submitQuery = async () => {
   const startTime = Date.now()
   
   try {
-    // Simulate API call - will be replaced with real backend integration
-    await new Promise(resolve => setTimeout(resolve, 1200))
+    // Call the chat API with Ollama integration
+    const chatResponse = await chatApi.sendMessage({
+      query: query.value.trim(),
+      session_id: sessionId.value,
+      user_id: userId.value || authStore.user?.id || 'default'
+    })
     
-    response.value = `This is a demo response for: "${query.value}". The actual query processing system will be implemented to connect with your SCADA systems and provide real operational data from your water infrastructure.`
+    // Handle the response
+    if (chatResponse.needs_clarification) {
+      response.value = `${chatResponse.response}\n\nClarification: ${chatResponse.clarification_question || 'Please provide more details.'}`
+    } else {
+      response.value = chatResponse.response
+    }
+    
     responseTime.value = Date.now() - startTime
     
   } catch (error) {
-    toast.add({ 
-      severity: 'error', 
-      summary: 'Error', 
-      detail: 'Failed to process query', 
-      life: 3000 
-    })
+    console.error('Query error:', error)
+    
+    // Check if it's a cancelled request
+    if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+      toast.add({ 
+        severity: 'warn', 
+        summary: 'Request Timeout', 
+        detail: 'The request took too long. Please try again.', 
+        life: 5000 
+      })
+    } else if (error.response?.status === 401) {
+      toast.add({ 
+        severity: 'error', 
+        summary: 'Authentication Error', 
+        detail: 'Please login again', 
+        life: 3000 
+      })
+      setTimeout(() => router.push('/login'), 1500)
+    } else if (error.response?.status === 503) {
+      toast.add({ 
+        severity: 'warn', 
+        summary: 'Service Unavailable', 
+        detail: 'Chat service is starting up. Please try again in a moment.', 
+        life: 5000 
+      })
+    } else {
+      toast.add({ 
+        severity: 'error', 
+        summary: 'Error', 
+        detail: error.response?.data?.error || error.message || 'Failed to process query', 
+        life: 3000 
+      })
+    }
   } finally {
     loading.value = false
   }
@@ -279,7 +328,11 @@ const handleLogout = async () => {
 }
 
 onMounted(() => {
-  // Initialize any core functionality
+  // Initialize user ID from auth store
+  userId.value = authStore.user?.id || authStore.user?.email || 'default'
+  
+  // Generate new session ID for this dashboard session
+  sessionId.value = uuidv4()
 })
 </script>
 

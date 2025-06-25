@@ -60,6 +60,7 @@ func main() {
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(cfg.JWTSecret)
 	etlHandler := handlers.NewETLHandler(database)
+	chatHandler := handlers.NewChatHandler(database)
 
 	// Auth routes (no middleware)
 	auth := r.Group("/api/auth")
@@ -102,11 +103,21 @@ func main() {
 			})
 		})
 
-		// Query endpoints - core functionality for Olivia
+		// Chat endpoints - natural language query processing
+		chat := api.Group("/chat")
+		{
+			chat.POST("", chatHandler.Chat)
+			chat.POST("/feedback", chatHandler.Feedback)
+			chat.GET("/sessions/:session_id", chatHandler.GetSession)
+			chat.DELETE("/sessions/:session_id", chatHandler.ClearSession)
+		}
+
+		// Legacy query endpoint (redirect to chat)
 		api.POST("/query", func(c *gin.Context) {
 			c.JSON(200, gin.H{
-				"message": "Query endpoint - coming soon",
-				"status":  "not_implemented",
+				"message": "Please use /api/chat endpoint for natural language queries",
+				"status":  "deprecated",
+				"new_endpoint": "/api/chat",
 			})
 		})
 
